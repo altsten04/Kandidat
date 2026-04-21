@@ -9,11 +9,12 @@ from scipy.io import loadmat
 # =========================
 # CONFIGURATION
 # =========================
+# these numbers can go up
 NUM_CLASSES = 17   # 16 grid positions + 1 "empty"
-BATCH_SIZE = 8
-EPOCHS_SIM = 10
+BATCH_SIZE = 8 # number of samples per epoch
+EPOCHS_SIM = 10 # more because sim should prob. be more
 EPOCHS_REAL = 5
-LR_SIM = 0.001
+LR_SIM = 0.001 #learning rate - often use low numbers
 LR_REAL = 0.0003
 
 # =========================
@@ -24,7 +25,7 @@ def get_label_from_folder(folder_name):
     Converts folder name into a class label.
     Example: pos_2.3 → label 7
     """
-    if folder_name == "empty":
+    if folder_name == "empty": 
         return 0
 
     elif folder_name.startswith("pos_"):
@@ -32,10 +33,10 @@ def get_label_from_folder(folder_name):
         row, col = coords.split(".")
 
         # Map grid position → class index (1–16)
-        return (int(row) - 1) * 4 + int(col)
+        return (int(row) - 1) * 4 + int(col) 
 
     else:
-        raise ValueError(folder_name)
+        raise ValueError(folder_name) #5.1 would not give error 
 
 # =========================
 # LOAD SIGNAL FUNCTION
@@ -49,7 +50,7 @@ def load_signal(path):
     """
     data = np.loadtxt(path, skiprows=1)
 
-    if data.ndim == 1:
+    if data.ndim == 1: #we dont have data with just 1 column so delete this?
         return data
     else:
         return data[:, -1]  # take last column (actual measurement)
@@ -63,29 +64,29 @@ class VNADataset(Dataset):
         mode = "sim" → simulated data (mag + phase files)
         mode = "real" → real data (.mat files)
         """
-        self.samples = []
+        self.samples = [] #dataset with all files as data points
         self.mode = mode
 
-        for folder in os.listdir(root_dir):
-            folder_path = os.path.join(root_dir, folder)
+        for folder in os.listdir(root_dir): #root_dir = base folder = dataset_sim tex
+            folder_path = os.path.join(root_dir, folder) #kandidat/dataset_sim/pos_1.1 - a path 
 
-            if not os.path.isdir(folder_path):
+            if not os.path.isdir(folder_path): #directory = folder, if folder does not exist:continue - goes back, next iteration
                 continue
 
-            label = get_label_from_folder(folder)
+            label = get_label_from_folder(folder) #takes a folder (pos_1.1) creates a label (1), empty=0
 
             # =========================
             # SIMULATED DATA
             # =========================
             if mode == "sim":
-                for f in os.listdir(folder_path):
+                for f in os.listdir(folder_path):#goes through every file in path
                     if f.endswith("_mag.csv"):
-                        mag_path = os.path.join(folder_path, f)
-                        phase_path = mag_path.replace("_mag.csv", "_phase.csv")
+                        mag_path = os.path.join(folder_path, f) #kandidat/dataset_sim/pos_1.1/(filename)
+                        phase_path = mag_path.replace("_mag.csv", "_phase.csv") #same as mag but change to phase
 
                         if os.path.exists(phase_path):
                             # One mag/phase pair = one sample
-                            self.samples.append((mag_path, phase_path, label))
+                            self.samples.append((mag_path, phase_path, label)) #add element with mag, phase,label to the list (as a tuple) so it can be used for the training later
 
             # =========================
             # REAL DATA (.mat)
@@ -93,10 +94,10 @@ class VNADataset(Dataset):
             elif mode == "real":
                 for f in os.listdir(folder_path):
                     if f.endswith(".mat"):
-                        self.samples.append((os.path.join(folder_path, f), label))
+                        self.samples.append((os.path.join(folder_path, f), label)) #only one sample
 
-    def __len__(self):
-        return len(self.samples)
+    def __len__(self): 
+        return len(self.samples) # just sees how many samples we have
 
     def __getitem__(self, idx):
 
@@ -104,10 +105,10 @@ class VNADataset(Dataset):
         # SIMULATED DATA PROCESSING
         # =========================
         if self.mode == "sim":
-            path_mag, path_phase, label = self.samples[idx]
+            path_mag, path_phase, label = self.samples[idx] #
 
-            # Load both files as full tables
-            mag_data = np.loadtxt(path_mag, delimiter=",", skiprows=1)
+            # Load both files as full tables - now I have the datasets with values
+            mag_data = np.loadtxt(path_mag, delimiter=",", skiprows=1) 
             phase_data = np.loadtxt(path_phase, delimiter=",", skiprows=1)
 
             # Take the last column = actual measurement values
@@ -115,14 +116,15 @@ class VNADataset(Dataset):
             phase = phase_data[:, -1]
 
             # Handle mismatch between empty and human files
+            #!!!!!!!!!!!!!!!! this feels a little strange - it creates a matrix with the same columns so the phase and mag are the same size
             if mag.size == 1601 and phase.size == 1601 * 21:
-                mag = np.tile(mag, 21)
+                mag = np.tile(mag, 21) 
 
             if phase.size == 1601 and mag.size == 1601 * 21:
                 phase = np.tile(phase, 21)
 
             # Safety check
-            if mag.size != phase.size:
+            if mag.size != phase.size: #must be same size
                 raise ValueError(
                     f"Magnitude and phase sizes do not match:\n"
                     f"{path_mag}\n{path_phase}\n"
@@ -133,20 +135,20 @@ class VNADataset(Dataset):
             complex_vector = mag * np.exp(1j * phase)
 
             # Ensure correct size
-            if complex_vector.size != 1601 * 21:
+            if complex_vector.size != 1601 * 21: #is it always this - if not: not good ajabaja!!!!! so check this!!!
                 raise ValueError(
                     f"Expected 33621 values, got {complex_vector.size}"
                 )
 
-            # Reshape to (freq, antennas)
-            data = complex_vector.reshape(1601, 21)
+            # Reshape to (freq, antennas) 
+            data = complex_vector.reshape(1601, 21) #converts to matrix again 1601x21 - is the first 1601 points for every stop different: they must be different - if they are the same:strange and prob. not so good
         # =========================
         # REAL DATA PROCESSING
         # =========================
         else:
             path, label = self.samples[idx]
 
-            mat = loadmat(path)
+            mat = loadmat(path) #load the matrix
 
             # Extract S21 (complex matrix)
             data = mat["S21"]   # shape: (1601, 21)
@@ -158,24 +160,24 @@ class VNADataset(Dataset):
         Im = np.imag(data)
 
         # Normalize (important for ML stability)
-        Re = (Re - np.mean(Re)) / (np.std(Re) + 1e-8)
+        Re = (Re - np.mean(Re)) / (np.std(Re) + 1e-8) #1e-8:tolerance:  magic number: dont want this in the middle of the code, so create a varible in the beginning
         Im = (Im - np.mean(Im)) / (np.std(Im) + 1e-8)
 
-        # Stack → shape becomes (2, freq, antennas)
+        # Stack → shape becomes (2, freq, antennas) - 2:re and im
         data = np.stack([Re, Im], axis=0)
 
-        # Convert to PyTorch tensors
+        # Convert to PyTorch tensors - tensor=matrix in matrix
         return torch.tensor(data, dtype=torch.float32), torch.tensor(label)
 
 # =========================
 # CNN MODEL (2D)
 # =========================
-class CNN2D(nn.Module):
+class CNN2D(nn.Module): # our neural network
     def __init__(self):
         super().__init__()
 
         # Convolution layers extract spatial patterns
-        self.conv = nn.Sequential(
+        self.conv = nn.Sequential( #our layers - maybe want to change the layers and values - need to argue about this in the report
             nn.Conv2d(2, 16, kernel_size=3, padding=1),
             nn.ReLU(),
             nn.MaxPool2d(2),
@@ -186,23 +188,23 @@ class CNN2D(nn.Module):
         )
 
         # Fully connected layers classify position
-        self.fc = nn.Sequential(
+        self.fc = nn.Sequential( #predictions from the other nn(conv), conv=base:learns patterns
             nn.Linear(32 * 400 * 5, 64),  # depends on input size after pooling
             nn.ReLU(),
             nn.Linear(64, NUM_CLASSES)
         )
 
     def forward(self, x):
-        x = self.conv(x)  # extract features
-        x = x.view(x.size(0), -1)  # flatten
+        x = self.conv(x)  # extract features 
+        x = x.view(x.size(0), -1)  # flatten from matrix to list
         return self.fc(x)  # output class scores
 
 # =========================
 # TRAIN FUNCTION
 # =========================
 def train_model(model, loader, optimizer, criterion):
-    model.train()
-    total_loss = 0
+    model.train()#tells the model to train
+    total_loss = 0 
 
     for x, y in loader:
         outputs = model(x)  # model prediction
@@ -222,7 +224,7 @@ def train_model(model, loader, optimizer, criterion):
 # EVALUATION FUNCTION
 # =========================
 def evaluate(model, loader):
-    model.eval()
+    model.eval() #tells the model to evaluate
     correct = 0
     total = 0
 
@@ -242,7 +244,7 @@ def evaluate(model, loader):
 # =========================
 # DATA PREPARATION
 # =========================
-def prepare_data(path, mode):
+def prepare_data(path, mode): 
     dataset = VNADataset(path, mode)
 
     # Split into train / validation / test
@@ -263,14 +265,16 @@ def prepare_data(path, mode):
 # MAIN PIPELINE
 # =========================
 
+#run all the functions in right order
+
 print("=== TRAIN SIM ===")
 
 dataset_sim, train_loader, val_loader, test_loader = prepare_data("dataset_sim", "sim")
 
 model = CNN2D()
 
-criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=LR_SIM)
+criterion = nn.CrossEntropyLoss() #criterion model - maybe want to argue why we chose this two in report
+optimizer = optim.Adam(model.parameters(), lr=LR_SIM) #optimization model
 
 # Train on simulated data first
 for epoch in range(EPOCHS_SIM):
